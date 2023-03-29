@@ -1,11 +1,16 @@
-#----------------------------------- https://github.com/m4mallu/clonebot-ui -----------------------------------------#
+#----------------------------------- https://github.com/m4mallu/clonebot ----------------------------------------------#
 import os
 import csv
+import time
 import shutil
 import asyncio
 import itertools
 from presets import Presets
+from datetime import datetime
+from library.sql import reset_all
 from pyrogram.errors import FloodWait
+from plugins.cb_input import update_type_buttons
+from pyrogram.enums import ChatType, ChatMemberStatus
 from library.sql import file_types, msg_id_limit, to_msg_id_cnf_db, master_index
 
 
@@ -13,28 +18,28 @@ from library.sql import file_types, msg_id_limit, to_msg_id_cnf_db, master_index
 async def find_msg_id(client, id, chat_id):
     id_last_msg = int()
     try:
-        async for user_message in client.USER.iter_history(chat_id):
-            messages = await client.USER.get_messages(chat_id, user_message.message_id, replies=0)
+        async for user_message in client.USER.get_chat_history(chat_id):
+            messages = await client.USER.get_messages(chat_id, user_message.id, replies=0)
             for file_type in file_types:
                 media = getattr(messages, file_type, None)
                 if media is not None:
-                    id_last_msg = str(messages.message_id).split(" ")[0]
+                    id_last_msg = str(messages.id).split(" ")[0]
                     await msg_id_limit(id, id_last_msg)
                     await to_msg_id_cnf_db(id, id_last_msg)
                     file_types.clear()
                     file_types.extend(Presets.FILE_TYPES)
                     return
     except FloodWait as e:
-        await asyncio.sleep(e.x)
+        await asyncio.sleep(e.value)
     except Exception:
         pass
 
 
 # Function to find percentage of the total process
-async def calc_percentage(sp, ep, message_id):
+async def calc_percentage(sp, ep, msg_id):
     const = pct = int()
     const = (ep - sp) + 1
-    pct = ((message_id + const) - ep) / const * 100  # Credits to ma wife to find a formula !
+    pct = ((msg_id + const) - ep) / const * 100  # Credits to my wife to find a formula !
     return pct
 
 
@@ -45,7 +50,7 @@ async def calc_progress(pct):
     return progress
 
 
-# Function to find DC Id:
+# Function to find DC ID:
 async def find_dc(chat_status):
     dc = chat_status.dc_id
     dc_id = {dc == 1: "𝙼𝚒𝚊𝚖𝚒 𝙵𝙻, 𝚄𝚂𝙰 [𝐃𝐂 𝟏]", dc == 2: "𝙰𝚖𝚜𝚝𝚎𝚛𝚍𝚊𝚖, 𝙽𝙻 [𝐃𝐂 𝟐]", dc == 3: "𝙼𝚒𝚊𝚖𝚒 𝙵𝙻, 𝚄𝚂𝙰 [𝐃𝐂 𝟑]",
@@ -88,3 +93,45 @@ async def del_user_cfg(id):
             shutil.rmtree(cfg_path)
         except Exception:
             pass
+
+
+# Function to calculate the time and date difference between two dates
+async def date_time_calc(start_date, start_time, cur_date, cur_time):
+    time_diff = time.strftime("%Hh %Mm", time.gmtime(cur_time - start_time))
+    date_diff = (datetime.strptime(cur_date, "%d/%m/%y") - datetime.strptime(start_date, "%d/%m/%y")).days
+    return f'{date_diff}D', time_diff
+
+
+# Functions to set the bot vaiables to default values
+async def set_to_defaults(id):
+    await reset_all(id)
+    file_types.clear()
+    file_types.extend(Presets.FILE_TYPES)
+    await update_type_buttons()
+
+
+# function to get the chat type of the source/target chat
+async def get_chat_type(chat_status):
+    x = chat_status.type
+    chat_status = {
+                           x == ChatType.CHANNEL: 'CHANNEL',
+                           x == ChatType.SUPERGROUP: 'SUPERGROUP',
+                           x == ChatType.GROUP: 'GROUP',
+                           x == ChatType.PRIVATE: 'PRIVATE',
+                           x == ChatType.BOT: 'BOT'
+    }.get(True)
+    return chat_status
+
+
+# Function to get the status of the chat member in groups and supergroups
+async def get_chat_member_status(member):
+    x = member.status
+    chat_member_status = {
+                           x == ChatMemberStatus.OWNER: 'OWNER',
+                           x == ChatMemberStatus.ADMINISTRATOR: 'ADMINISTRATOR',
+                           x == ChatMemberStatus.MEMBER: 'MEMBER',
+                           x == ChatMemberStatus.RESTRICTED: 'RESTRICTED',
+                           x == ChatMemberStatus.LEFT: 'LEFT',
+                           x == ChatMemberStatus.BANNED: 'BANNED'
+    }.get(True)
+    return chat_member_status
